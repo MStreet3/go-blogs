@@ -8,18 +8,7 @@ In the language and runtime, not a library.
 
 This changes how you structure your programs.
 
-## Goroutines and Channels
-
-Goroutines are independently executing functions in the same address space.
-
-.code concpatterns/basicchannels.go /STARTMAIN1/,/STOPMAIN1/
-
-Channels are typed values that allow goroutines to synchronize and exchange information.
-
-.code concpatterns/basicchannels.go /STARTMAIN2/,/STOPMAIN2/
-
 For more on the basics, watch [Go Concurrency Patterns (Pike, 2012)](http://go.dev/talks/2012/concurrency.slide#1).
-
 
 ## Example: Ad hoc confinement
 

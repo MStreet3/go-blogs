@@ -20,6 +20,13 @@ Channels are typed values that allow goroutines to synchronize and exchange info
 
 For more on the basics, watch [Go Concurrency Patterns (Pike, 2012)](http://go.dev/talks/2012/concurrency.slide#1).
 
-## Example: ping-pong
 
-.play concpatterns/pingpong.go /STARTMAIN1/,/STOPMAIN1/
+## Example: Ad hoc confinement
+
+.code concpatterns/adhoc/adhoc-deadlock.go /^func forwarder/,/^}/
+
+.code concpatterns/adhoc/adhoc-deadlock.go /^func consumer/,/^}/
+
+## Example: Ad hoc deadlock
+
+.play concpatterns/adhoc/adhoc-deadlock.go /STARTMAIN1/,/STOPMAIN1/

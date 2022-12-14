@@ -1,28 +1,25 @@
-Advanced Go Concurrency Patterns
+# Advanced Go Concurrency Patterns
 
 Michael Street
 
-* Go supports concurrency
+## Go supports concurrency
 
 In the language and runtime, not a library.
 
 This changes how you structure your programs.
 
-* Goroutines and Channels
+## Goroutines and Channels
 
 Goroutines are independently executing functions in the same address space.
 
-   go f()
-   go g(1, 2)
+.code concpatterns/basicchannels.go /STARTMAIN1/,/STOPMAIN1/
 
 Channels are typed values that allow goroutines to synchronize and exchange information.
 
-  c := make(chan int)
-  go func() { c <- 3 }()
-  n := <-c
+.code concpatterns/basicchannels.go /STARTMAIN2/,/STOPMAIN2/
 
-For more on the basics, watch [[http://go.dev/talks/2012/concurrency.slide#1][Go Concurrency Patterns (Pike, 2012)]].
+For more on the basics, watch [Go Concurrency Patterns (Pike, 2012)](http://go.dev/talks/2012/concurrency.slide#1).
 
-* Example: ping-pong
+## Example: ping-pong
 
 .play concpatterns/pingpong.go /STARTMAIN1/,/STOPMAIN1/

@@ -12,10 +12,14 @@ For more on the basics, watch [Go Concurrency Patterns (Pike, 2012)](http://go.d
 
 * Example: Ad hoc confinement
 
-.code concpatterns/adhoc/adhoc-deadlock.go /^func forwarder/,/^}/
+.code ./concpatterns/adhoc/adhoc-deadlock.go /^func forwarder/,/^}/
 
-.code concpatterns/adhoc/adhoc-deadlock.go /^func consumer/,/^}/
+.code ./concpatterns/adhoc/adhoc-deadlock.go /^func consumer/,/^}/
 
 * Example: Ad hoc deadlock
 
-.play concpatterns/adhoc/adhoc-deadlock.go /STARTMAIN1/,/STOPMAIN1/
+.play concpatterns/adhoc/helloworld.go
+
+* Another slide
+
+Will this display?

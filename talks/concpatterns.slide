@@ -1,12 +1,11 @@
-# Advanced Go Concurrency Patterns
+Advanced Go Concurrency Patterns
 
 Michael Street
 
-## Go supports concurrency
+* Go supports concurrency
 
 In the language and runtime, not a library.
 
 This changes how you structure your programs.
 
 For more on the basics, watch [Go Concurrency Patterns (Pike, 2012)](http://go.dev/talks/2012/concurrency.slide#1).
-

@@ -9,3 +9,13 @@ In the language and runtime, not a library.
 This changes how you structure your programs.
 
 For more on the basics, watch [Go Concurrency Patterns (Pike, 2012)](http://go.dev/talks/2012/concurrency.slide#1).
+
+* Example: Ad hoc confinement
+
+.code concpatterns/adhoc/adhoc-deadlock.go /^func forwarder/,/^}/
+
+.code concpatterns/adhoc/adhoc-deadlock.go /^func consumer/,/^}/
+
+* Example: Ad hoc deadlock
+
+.play concpatterns/adhoc/adhoc-deadlock.go /STARTMAIN1/,/STOPMAIN1/

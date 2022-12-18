@@ -1,0 +1,166 @@
+Healing Goroutines: Livelock Recovery
+
+Michael Street
+
+* Deadlocks, livelocks and starvation
+
+One of the core philosophies of Go is to subdivide a complex problem into
+manageable, independent operations that complete a common goal via communicating
+state.  It is critical that each of these independent operations always has
+useful work to complete and it is not always obvious that this condition can be
+met.  When multiple independent workers fail to communicate correctly failures
+generally arise in the overall program and these failures of communication are 
+characterized as either deadlocks, livelocks or starvation.
+
+Deadlocks occur when none of the independent workers can advance because they
+each hold resources that the other needs to continue.  Livelocks are a special
+case of starvation where an independent worker may appear to be doing work but
+that work is not useful within the context of advancing the desired state of
+the system.  Starvation is an instance, in which a routine is out competed by
+another routine for a shared resource.
+
+This article will focus solely on the `livelock` failure mode to demonstrate
+a technique for potentially healing routines experiencing this condition.
+
+* Defining a ward to consume a Reader
+
+Let's say that we have a network connection that exposes a `Reader` interface:
+
+.code livelock.go /STARTREADER OMIT/,/STOPREADER OMIT/
+
+We'll need to consume the `Reader` interface to encounter our `livelock`.  Below
+is an implementation of a `readerWard` that will do the consumer work:
+
+.code livelock.go /STARTREADERWARD OMIT/,/STOPREADERWARD OMIT/
+
+*1* Define a `done` channel that once closed indicates that the worker is completely
+shutdown.
+
+*2* Define an `errs` channel to broadcast any errors to external listeners.  The 
+worker does not maintain any business logic related to recovering from or responding
+to errors; it only reads and forwards what it has read.
+
+*3* Defer a call to the `cleanup` closure, which ensures that the ticker is shutdown
+and that each of the returned channels are closed.  Closes `done` last.
+
+*4* Read from the connection for each tick of the ticker.
+
+*5* Define a `sendErr` closure that will either send the error, quit if stopped or
+drop the error if there are no listeners.
+
+*6* Return the `done` and `errs` channels immediately for upstream consumers to use.
+
+* Livelock: An example
+
+We have one implementation of this `Reader` that will eventually `livelock` the
+worker that consumes it:
+
+.code livelock.go /STARTEVENTUALLYFATALREADER OMIT/,/STOPEVENTUALLYFATALREADER OMIT/
+
+In the case that we are attempting to read from the `eventuallyFatal` implementation,
+the only way to recover would be to create a new instance of the `eventuallyFatal`
+`Reader`.
+
+** Livelocked Reader
+
+.play livelock.go /STARTMAINLIVELOCK OMIT/,/STOPMAINLIVELOCK OMIT/
+
+*1* Start reading from the connection using the returned `Reader`.
+
+*2* Eventually the only logs we see will be the error logs as the worker is experiencing
+a `livelock` where it can only get errors from the `Reader`.
+
+*3* Shutdown the reader after three seconds and wait for the done signal.
+
+* Monitoring: Recovery prerequisite
+
+We have a worker routine that can easily enter a `livelock` while trying to consume
+a `Reader`.  To heal this worker from its `livelock` state there is a prerequisite:
+_monitoring_.  That is, we need to observe the state of the worker and define the conditions,
+which when met mean the worker is in an unhealthy or unrecoverable state.
+
+.code livelockHealed.go /STARTMONITOR OMIT/,/STOPMONITOR OMIT/
+
+*1* The monitor routine simply consumes a channel of _errors_.  If this channel
+is closed then the monitor routine stops.
+
+*2* Each error read from the `errs` parameter channel is passed to the function 
+`isUnhealthy`, which separates the monitor's shutdown business logic from the source
+of errors.  If it turns out that `isUnhealthy` returns `true`, then the monitor
+shuts itself down and closes the `done` channel.  Any clients waiting on a signal
+from the `done` channel will know that the worker being monitored should be killed
+and restarted.
+
+* Steward Pattern
+
+A steward is a goroutine with the responsibility of healing its _wards_.  In our
+case the ward goroutine is reading from a network and can enter into an unhealthy
+`livelock` state.
+
+The _steward_ assigns some monitoring to its _wards_ and will restart a _ward_ 
+based on any received restart signals from the monitoring goroutines.  Below is
+an example of a `connectionSteward` that monitors a `readerWard` and responds
+to `livelock` scenarios with a _ward_ restart:
+
+.code livelockHealed.go /STARTSTEWARD OMIT/,/STOPSTEWARD OMIT/
+
+*1* Here we define some channels that are owned by the steward and immediately
+returned, which makes the steward itself observable like all other workers.
+
+*2* The steward encapsulates the restart business logic by defining the `isUnhealthy`
+closure.  We define an unhealthy worker as one that has returned an `ErrFatalSocketError`
+on its output error channel.  All other errors would be ignored.
+
+*3* Here we connect to the network and get a connection and an error.  The steward
+itself may have a client that could consume these start up errors and do some other
+business logic.  If there is an error in start up we will just send the error on
+the steward's error channel and try again.
+
+*4* We can start the reader ward once we have a readable connection.
+
+*5* Here we pass the ward's error channel to a monitoring worker.  The monitoring
+worker returns a `restart` channel.  If we get a read from `restart`, then
+the monitoring routine is stopped and we should restart the ward.
+
+*6* This select statement blocks until the steward is stopped or there is a signal
+from the `restart` channel.
+
+*7* After receiving either communication in *6* we need to clean up the ward and 
+make sure that it is done reading, then we can close the network.  Once the network
+is closed the steward will re-execute the `default` clause if the steward has not
+been stopped.
+
+** Steward: Continuous Recovery
+
+The main function below executes the steward as it continuously heals a ward that
+reads from a connection that will eventually be fatal:
+
+.play livelockHealed.go /STARTMAIN OMIT/,/STOPMAIN OMIT/
+
+The only difference this time is that now we are calling the `connectionSteward`
+directly instead of the ward.  The steward manages the results from monitor and 
+will repeatedly restart the ward to advance it out of its `livelock` state.
+
+* Conclusions
+
+Good concurrent design is about subdividing a problem into manageable definitions
+that can be executed independently.  Here we examined the problem of resolving 
+a system's `livelock` state in the context of reading from a potentially faulty
+network.  We subdivided this problem into three distinct subproblems:
+
+1. *ward*: a routine to read from the network and forward along its state as an
+error channel
+
+2. *monitor*: a routine to consume an error channel with a simple `isUnhealthy`
+function to send out a binary signal if the source of the error channel should
+be restarted.
+
+3. *steward*: a routine to start a ward, apply monitoring to the ward, define
+the unhealthy state of the ward and ultimately listen to the monitor for restart signals
+and to execute the restarts.
+
+With these three subproblems operating independently we were able to design a self-healing
+system that can respond to expected network failures. Not all solutions to a `livelock` 
+scenario can be resolved with a restart, but as the business logic to recover 
+from a failure grows, it is important to think of defining easily resolved 
+subproblems to communicate state within the broader application.

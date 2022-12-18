@@ -1,6 +1,7 @@
 Healing Goroutines: Livelock Recovery
 
 Michael Street
+[[https://github.com/MStreet3][github.com/mstreet3]]
 
 * Deadlocks, livelocks and starvation
 
@@ -164,3 +165,9 @@ system that can respond to expected network failures. Not all solutions to a `li
 scenario can be resolved with a restart, but as the business logic to recover 
 from a failure grows, it is important to think of defining easily resolved 
 subproblems to communicate state within the broader application.
+
+* Related Reading
+
+- [[https://www.oreilly.com/library/view/concurrency-in-go/9781491941294/][Concurrency in Go]]
+- [[https://go.dev/talks/2012/concurrency.slide#1][Go Concurrency Patterns]] by Rob Pike
+- [[https://go.dev/talks/2013/advconc.slide#1][Advanced Go Concurrency Patterns]] by Sameer Ajmani

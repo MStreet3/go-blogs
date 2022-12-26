@@ -20,9 +20,9 @@ func main() {
 		go func() {
 			defer wg.Done()
 
-			mu.Lock()         // <2> // HL
-			defer mu.Unlock() // <3> // HL
-			count++           // <4> // HL
+			mu.Lock()   // <2> // HL
+			count++     // <3> // HL
+			mu.Unlock() // <4> // HL
 		}()
 	}
 

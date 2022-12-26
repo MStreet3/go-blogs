@@ -48,9 +48,9 @@ variable to 10:
 
 *2* Obtain the mutex lock by calling `Lock`.
 
-*3* Release the mutex lock in a `defer` statment.
+*3* Increment the counter in the goroutine after the mutex lock is obtained.
 
-*4* Increment the counter in the goroutine after the mutex lock is obtained.
+*4* Release the mutex lock to end the critical section that mutates the shared state.
 
 The premise of using a mutex is that concurrent code will have access to the same
 shared variables, but can only modify or mutate these variables in the critical
@@ -88,17 +88,19 @@ We can use this mutex type to make a concurrent counter as well:
 
 .play 2_channelmutex.go /STARTMAIN1 OMIT/,/STOPMAIN1 OMIT/
 
-*1* Declare the counter variable called `count`.
+*1* Declare a new mutex type that wraps the integer value 0.  We have to use the 
+`NewMutex` constructor to make our channel mutex because the `nil` channel will 
+not work, we must be able to place values into the channel's buffer.  The buffer 
+owns the variable between updates and acts as the ownership mediator.
 
-*2* We have to use the `NewMutex` constructor to make our channel mutex because the 
-`nil` channel will not work, we must be able to place values into the channel's
-buffer.  The buffer owns the variable between updates and acts as the ownership
-mediator.
+*2* Call the `Lock` method on the mutex to obtain the shared variable.  This
+call blocks until the variable is available.
 
-*3* Call the `Lock` method on the mutex to obtain the shared count variable.  This
-call blocks until `count` is available.
+*3* Increment the variable and *4* then unlock the variable via the `Unlock` method by 
+returning the variable to the mutex.
 
-*4* Increment count and *5* then unlock the variable via the `Unlock` method.
+*5* We need to now read a value from the mutex by calling `Lock` and placing the
+value into a new variable.  
 
 ** Downsides and Limitations
 

@@ -36,9 +36,8 @@ func NewMutex[T any](val T) mutex[T] {
 
 func bad() {
 	var wg sync.WaitGroup
-	var count int // <1> // HL
 
-	mu := NewMutex(count) // <2> // HL
+	mu := NewMutex(0)
 
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
@@ -46,44 +45,43 @@ func bad() {
 		go func() {
 			defer wg.Done()
 
-			count = mu.Lock()
-			count++
-			mu.Unlock(count) // HL
+			val := mu.Lock()
+			val++
+			mu.Unlock(val) // HL
 
-			// Modify count after unlock is a data race, however,
+			// Modify val after unlock is a data race, however,
 			// Go compiler has no issues compiling this code!
-			count++ // HL
+			val++ // HL
 		}()
 		// STOPBAD OMIT
 	}
 
 	wg.Wait()
 
-	count = mu.Lock() // <6> // HL
+	count := mu.Lock()
 	fmt.Printf("Got: %d\n", count)
 }
 
 // STARTMAIN1 OMIT
 func main() {
 	var wg sync.WaitGroup
-	var count int // <1> // HL
 
-	mu := NewMutex(count) // <2> // HL
+	mu := NewMutex(0) // <1> // HL
 
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			count = mu.Lock() // <3> // HL
-			count++           // <4> // HL
-			mu.Unlock(count)  // <5> // HL
+			val := mu.Lock() // <2> // HL
+			val++            // <3> // HL
+			mu.Unlock(val)   // <4> // HL
 		}()
 	}
 
 	wg.Wait()
 
-	count = mu.Lock() // <6> // HL
+	count := mu.Lock() // <5> // HL
 	fmt.Printf("Got: %d\n", count)
 }
 

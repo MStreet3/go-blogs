@@ -1,0 +1,135 @@
+Channels as Mutual Exclusion Locks
+
+Michael Street
+[[https://github.com/MStreet3][github.com/mstreet3]]
+[[https://www.linkedin.com/in/michael-street/][linkedin.com]]
+
+* Sharing State in Concurrent Processes
+
+Concurrent programming is a paradigm, in which pieces of software execute
+independently of one another.  Software that leverages concurrency to achieve
+useful outcomes generally must share state between these independently executing
+components.
+
+Sharing state, however, is exactly where concurrent programming can become difficult
+and error prone, which can lead to incorrect software.  The problems with shared
+state come down to two main concepts: _mutability_ and _ownership_.
+
+Data is _mutable_ if it can be changed.  Data is _owned_ if it is available to be
+read or modified (i.e., changed).  
+
+The purpose of this blog post is to show how Go's `channel` primitive can be
+used to implement a mutual exclusion lock, which allows programs to share state
+by communicating rather than sharing state directly.  This technique is not necessarily
+practical, safe or useful for most use cases, but can give a deeper understanding
+of channels and their power in the Go language.
+
+* Mutual Exclusion
+
+A _mutual_ _exclusion_ _lock_ or _mutex_ for short, is a common tool for claiming
+ownership of a piece of shared state in a program.  If multiple software components
+execute independently and must access a shared variable (e.g., a bank account balance),
+then only the component that holds the lock can read or modify the variable.
+
+The `sync` package in go provides low-level locking features with a simple API:
+
+    var mu sync.Mutex
+
+    mu.Lock() // Locks the mutex.
+    // Critical Path .. do something with shared variables
+    mu.Unlock() // Unlocks the mutex.
+
+Here is an example of using a mutex to concurrently update the state of a counter
+variable to 10:
+
+.play 1_channelmutex.go /STARTMAIN1 OMIT/,/STOPMAIN1 OMIT/
+
+*1* Declare a counter variable that will be modified by concurrent goroutines.
+
+*2* Obtain the mutex lock by calling `Lock`.
+
+*3* Release the mutex lock in a `defer` statment.
+
+*4* Increment the counter in the goroutine after the mutex lock is obtained.
+
+The premise of using a mutex is that concurrent code will have access to the same
+shared variables, but can only modify or mutate these variables in the critical
+path section between the `Lock` and `Unlock` calls of a single `sync.Mutex`
+variable.
+
+* Channel as a Mutex
+
+One of the core tenets of Go is:
+
+    Do not communicate by sharing memory; instead, share memory by communicating.
+
+With that in mind, it is interesting to explore how exactly we can `share` `memory` `by`
+`communicating`.  To do this we will need to leverage channels, which is the Go
+synchronization primitive that enables interprocess communication.
+
+.code 2_channelmutex.go /STARTMUTEX OMIT/,/STOPMUTEX OMIT/
+
+The listing above defines a basic `mutex` type that internally defines a channel
+to require ownership of a value of the generic type `T`.  The API is different than
+the `sync.Mutex` package and expresses the fact that the channel mediates the ownership
+of the shared value.
+
+To "lock" a variable with a channel means to read it from the channel into the
+currently executing goroutine. To "unlock" a variable from a channel means to 
+write the variable to the channel making it available for another goroutine to read.
+
+This mutex needs a constructor because it has an internal channel. The nil value
+of a `mutex` type is not useful because we need a buffered channel to implement the
+locking.
+
+.code 2_channelmutex.go /STARTCONSTRUCTOR OMIT/,/STOPCONSTRUCTOR OMIT/
+
+We can use this mutex type to make a concurrent counter as well:
+
+.play 2_channelmutex.go /STARTMAIN1 OMIT/,/STOPMAIN1 OMIT/
+
+*1* Declare the counter variable called `count`.
+
+*2* We have to use the `NewMutex` constructor to make our channel mutex because the 
+`nil` channel will not work, we must be able to place values into the channel's
+buffer.  The buffer owns the variable between updates and acts as the ownership
+mediator.
+
+*3* Call the `Lock` method on the mutex to obtain the shared count variable.  This
+call blocks until `count` is available.
+
+*4* Increment count and *5* then unlock the variable via the `Unlock` method.
+
+** Downsides and Limitations
+
+The _channel_ _as_ _a_ _mutex_ pattern is not a technique we would regularly use in
+practice.  We are demonstrating it here simply to illustrate the point that channels
+funnel values between goroutines in such a way that the value can be thought to have
+a single owner.  This single owner concept, however, is only a convention.  In 
+go it is possible to continue to use a value even after sending it on a channel, 
+which can cause dangling pointers and data races so should be avoided.  
+
+.code 2_channelmutex.go /STARTBAD OMIT/,/STOPBAD OMIT/
+
+Aside from that the pattern implemented here has two major drawbacks:
+
+- `nil` value of a `mutex` custom type is useless and causes deadlocks
+- cannot pair the `mutex` custom type with a `defer` statement because `defer` statment arguments are evaluated when called
+
+* Conclusions
+
+Concurrent programming is a paradigm, in which pieces of software execute
+independently of one another and ultimately resolve a single state of the system
+to achieve some goal.  Sharing state correctly under concurrent operations is difficult
+and programming languages provide their own philosophies, safe guards and primitive
+types to enable developers to write correct software.
+
+Go's primary philosophy on concurrency is that developers should share state by
+communicating rather than communicating via shared state.  This mantra is difficult
+to understand at first and confusing given the robustness of the `sync` package
+provided by the Go standard library.
+
+This blog post digs deeper into the meaning of this phrase by implementing a version
+of a mutex lock using channels. This technique of using a channel as a mutex is not 
+necessarily practical, safe or useful for most use cases, but can give a deeper understanding
+of channels and their power in the Go language.

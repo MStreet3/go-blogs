@@ -4,6 +4,13 @@ Michael Street
 [[https://github.com/MStreet3][github.com/mstreet3]]
 [[https://www.linkedin.com/in/michael-street/][linkedin.com]]
 
+Go and Rust are two languages that enable concurrent programming.  Go has a number
+of concurrency features that are simple to use and elegant to write, but lacks 
+much of the compile time concurrency and memory safety checks included in Rust.
+This post was inspired by looking at some of the differences between Go and Rust,
+but focuses solely on Go.  Particularly, this post examines how to implement a custom
+mutual exclusion lock in Go using a struct with a private channel.
+
 * Sharing State in Concurrent Processes
 
 Concurrent programming is a paradigm, in which pieces of software execute
@@ -11,15 +18,15 @@ independently of one another.  Software that leverages concurrency to achieve
 useful outcomes generally must share state between these independently executing
 components.
 
-Sharing state, however, is exactly where concurrent programming can become difficult
-and error prone, which can lead to incorrect software.  The problems with shared
-state come down to two main concepts: _mutability_ and _ownership_.
-
-Data is _mutable_ if it can be changed.  Data is _owned_ if it is available to be
-read or modified (i.e., changed).  
+Sharing state, however, is exactly where concurrent programming can become difficult.
+The problems with shared state come down to two main concepts: _mutability_ and 
+_ownership_.  Data is _mutable_ if it can be changed.  Data is _owned_ by a process
+if only a single process is able to read or mutate it.  Combining mutable state
+with poor ownership boundaries leads to incorrect software.  
 
 The purpose of this blog post is to show how Go's `channel` primitive can be
-used to implement a mutual exclusion lock, which allows programs to share state
+used to implement a mutual exclusion lock ("mutex").  Using a channel requires that
+the shared data be passed between goroutines, which allows programs to share state
 by communicating rather than sharing state directly.  This technique is not necessarily
 practical, safe or useful for most use cases, but can give a deeper understanding
 of channels and their power in the Go language.
@@ -31,7 +38,8 @@ ownership of a piece of shared state in a program.  If multiple software compone
 execute independently and must access a shared variable (e.g., a bank account balance),
 then only the component that holds the lock can read or modify the variable.
 
-The `sync` package in go provides low-level locking features with a simple API:
+The [[https://pkg.go.dev/sync#Mutex][sync]] package in Go provides low-level 
+locking features with a simple API:
 
     var mu sync.Mutex
 
@@ -55,7 +63,9 @@ variable to 10:
 The premise of using a mutex is that concurrent code will have access to the same
 shared variables, but can only modify or mutate these variables in the critical
 path section between the `Lock` and `Unlock` calls of a single `sync.Mutex`
-variable.
+variable.  The mutex approach is actually well-suited for the simple scenario of 
+incrementing a counter, but in the next section we will look at using channels
+to implement the required controls on data mutability and ownership.
 
 * Channel as a Mutex
 
@@ -63,26 +73,30 @@ One of the core tenets of Go is:
 
     Do not communicate by sharing memory; instead, share memory by communicating.
 
-With that in mind, it is interesting to explore how exactly we can `share` `memory` `by`
-`communicating`.  To do this we will need to leverage channels, which is the Go
+With that in mind, the question becomes: How exactly can we share memory by 
+communicating?  To do this we will need to leverage channels, which is the Go
 synchronization primitive that enables interprocess communication.
+
+The listing below defines a basic `mutex` type that has an internal `c` field which
+is a channel.  We will use the channel's buffer to hold a value of of the generic 
+type `T`.  
 
 .code 2_channelmutex.go /STARTMUTEX OMIT/,/STOPMUTEX OMIT/
 
-The listing above defines a basic `mutex` type that internally defines a channel
-to require ownership of a value of the generic type `T`.  The API is different than
-the `sync.Mutex` package and expresses the fact that the channel mediates the ownership
-of the shared value.
-
-To "lock" a variable with a channel means to read it from the channel into the
-currently executing goroutine. To "unlock" a variable from a channel means to 
-write the variable to the channel making it available for another goroutine to read.
-
-This mutex needs a constructor because it has an internal channel. The nil value
-of a `mutex` type is not useful because we need a buffered channel to implement the
-locking.
+This `mutex` needs a constructor as we need to build an instance of the internal
+channel and ensure that it is buffered. 
 
 .code 2_channelmutex.go /STARTCONSTRUCTOR OMIT/,/STOPCONSTRUCTOR OMIT/
+
+The API of the custom `mutex` type is different than the `sync.Mutex` package and 
+expresses the fact that the channel mediates the ownership of the shared value. 
+The custom mutex leverages the fact that no goroutine can access a value while 
+the value is in the channel's buffer. 
+
+Calling `Lock` on the mutex will read a value from the channel and return it into the
+currently executing goroutine. Calling `Unlock` on the mutex will take a value
+and place the value into the channel's buffer, which makes the value available 
+for another goroutine to read.
 
 We can use this mutex type to make a concurrent counter as well:
 
@@ -135,3 +149,7 @@ This blog post digs deeper into the meaning of this phrase by implementing a ver
 of a mutex lock using channels. This technique of using a channel as a mutex is not 
 necessarily practical, safe or useful for most use cases, but can give a deeper understanding
 of channels and their power in the Go language.
+
+* Related Reading
+
+- [[https://doc.rust-lang.org/book/ch16-02-message-passing.html][Ch. 16.2: Message Passing (The Rust Book)]]

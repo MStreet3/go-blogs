@@ -4,7 +4,7 @@ Michael Street
 [[https://github.com/MStreet3][github.com/mstreet3]]
 [[https://www.linkedin.com/in/michael-street/][linkedin.com]]
 
-Go and Rust are two languages that enable concurrent programming.  Go has a number
+[[https://go.dev/][Go]] and [[https://www.rust-lang.org/][Rust]] are two languages that enable concurrent programming.  Go has a number
 of concurrency features that are simple to use and elegant to write, but lacks 
 much of the compile time concurrency and memory safety checks included in Rust.
 This post was inspired by looking at some of the differences between Go and Rust,
@@ -153,3 +153,5 @@ of channels and their power in the Go language.
 * Related Reading
 
 - [[https://doc.rust-lang.org/book/ch16-02-message-passing.html][Ch. 16.2: Message Passing (The Rust Book)]]
+- [[https://doc.rust-lang.org/book/ch16-00-concurrency.html][Fearless Concurrency (The Rust Book)]]
+- [[https://go.dev/doc/effective_go#concurrency][Effective Concurrency in Go]]

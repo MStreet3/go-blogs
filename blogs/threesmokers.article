@@ -1,0 +1,206 @@
+The "Three Smokers" Problem
+
+Michael Street
+[[https://github.com/MStreet3][github.com/mstreet3]]
+[[https://www.linkedin.com/in/michael-street/][linkedin.com]]
+
+# Background on the problem
+* The "Three Smokers" Problem
+The "three smokers" problem is a canonical concurrency problem in computer science.  The problem
+forces the solver to resolve a deadlock scenario that arises when each smoker acts to satisfy 
+their own needs independently.
+
+## What
+Wikipedia states the problem as:
+
+    Assume a cigarette requires three ingredients to make and smoke: tobacco, paper and a lighter.
+
+    There are three smokers around a table:
+    - One smoker has an infinite supply of tobacco.
+    - One smoker has an infinite supply of paper.
+    - One smoker has a lighter.
+
+    There is also a non-smoking agent. The agent picks two items arbitrarily and places them on the
+    table. 
+    
+    The smoker with the third component should remove the two items from the table, use them 
+    to make a cigarette, which they smoke for a while. Once the smoker has finished their cigarette, 
+    the agent places two new items on the table. 
+    
+    This process continues forever.
+
+** Why
+The problem highlights the need for proper synchronization in concurrent systems.  
+
+There is inherent competition to obtain all the necessary resources because each smoker 
+shares a resource requirement with another smoker.  Also, since a smoker that holds a resouces 
+prevents the other smoker from using that item there is always the risk that neither smoker can
+satisfy their desire to smoke. The agent will no longer operate if no smoker completes a cigarette
+and the system deadlocks. 
+
+** A Non-Deadlocking Solution
+There are many solutions to this problem.  This post details a solution to the problem that first
+subdivides the problem into several sub-problems:
+
+- *agent*: waits for a signal and places two items onto the table
+- *table*: receives items from the agent and places them on the table 
+- *smoker*: receives two items from the table and makes a cigarette 
+- *signaler*: listens for smokers to complete a cigarette and signals the agent
+
+This solution only uses `channels` to coordinate the sub-problems.  The smokers do not compete against
+each other for resources because the table acts as the mediator.  The table will wait until two items are 
+available to send, determine which smoker can use both items and then send the items to the correct 
+smoker.  The smokers remain "dumb" and the business logic is maintained in the table problem.
+
+The following sections will detail the sub-problem modeling, examine the table in-depth and finally
+discuss the necessary steps to coordinate the entire process with a signaler and a main function.
+
+* Modeling the Sub-problems
+
+The first step to solving the problem is to break it down into its consituent parts.  
+This section will review each of the sub-problems starting with the simplest to understand: the agent
+and the smoker.  The section ends with an explanation of the table sub-problem and how it solves
+the potential deadlock of the problem.
+
+.image threesmokers/3smokers.png
+.caption _Figure_ _1_: A diagram of the various sub-problems and the communication signals connecting them.
+
+
+** Agent
+
+The first concurrent worker we'll look at is the *agent*.  The agent's job is simply to produce
+two arbitrarily selected components. The agent function signature accepts a `stop` channel and a 
+`signal` channel.  The `stop` channel will stop the agent's internal goroutine when closed.  If the 
+agent receives a communication on the signal channel then it will send new items out onto the table.  
+
+Let's look at the rest of the code in more detail:
+
+.code threesmokers/main.go /STARTAGENT OMIT/,/STOPAGENT OMIT/
+.caption _Listing_ _1_: Source code for the agent sub-problem.
+
+*1* The agent returns a read-only `done` channel and a struct called `AvailableComponents`.  The `done`
+channel indicates to any listeners that the agent goroutine is shutdown once closed.  `AvailableComponents` 
+groups together three channels - one channel for each type of smoking component.
+
+*2* `cleanup` is a closure that will run when the goroutine is stopped and it closes all the channels
+returned in the `AvailableComponents` struct.
+
+*3* Here we call `getComponents` which returns two components that must be sent out on the agent's
+returned channels.
+
+*4* Next, we loop over the components and send the component down the proper channel based on a switch 
+statement.
+
+*5* Notice that each send of a component is wrapped in a select statement so that the sends will 
+be cancelled if the agent is stopped.
+
+** Smoker
+
+The smoker worker is designed to also be quite simple.  The smoker works on three tasks:
+
+- listen for new components
+- smoke a cigarette once it has the ingredients
+- send a message out after smoking
+
+Each smoker accepts a `stop` channel so that the callers can cancel any work when needed.  Smokers
+also accept two read-only channels that correspond to the smoking component that the smoker is missing.
+We'll only examine the smoker with an infinte supply of tobacco (i.e., *hasTobacco*), which accepts
+a channel of papers and a channel for a lighter:
+
+.code threesmokers/main.go /STARTHASTOBACCO OMIT/,/STOPHASTOBACCO OMIT/
+.caption _Listing_ _2_: Example source code for the smoker with an infinite tobacco supply.
+
+*1* The smoker defines a `done` channel and a `messages` channel, both of which will be closed in
+the cleanup function.
+
+*2* Here we define a `cleanup` closure that closes the two channels that the smoker writes to.
+
+*3* This is the inner loop where the smoker will loop and wait to receive both of the components it is
+missing to make a cigarette.  This select block can be pre-empted by a closure of the `stop` channel.
+
+*4* Once the smoker has both of the outstanding components to make a cigarette, it will make a message.
+
+*5* Finally, the smoker sends the message out onto the messages channel, which can be prevented
+if the `stop` channel is closed.
+
+** Table
+
+The table sub-problem is the piece that solves the coordination of the simple agent and the simple
+smoker.  Let's review the function signature of the table sub-problem:
+
+.code threesmokers/main.go /STARTTABLESIG OMIT/,/STOPTABLESIG OMIT/
+.caption _Listing_ _3a_: The table sub-problem returns a done channel and three structs.  Each struct has channels intended for a specific smoker.
+
+The table function acts as the sole listener to the agent and then generates
+new channels for the smokers to consume.  First we'll create new channels for each of the smokers to listen on and return them in their
+respective structs:
+
+.code threesmokers/main.go /STARTTABLESWT OMIT/,/STOPTABLESWT OMIT/
+.caption _Listing_ _3b_: The smoker with tobacco (SWT) requires a papers channel and lighter channel to listen on.
+
+Next, the table will fetch components by listening to the channels supplied via the `AvailableComponents`
+struct.
+
+.code threesmokers/main.go /STARTFETCHCOMPONENTS OMIT/,/STOPFETCHCOMPONENTS OMIT/
+.caption _Listing_ _3c_: The `for` loop will run twice and update the boolean values on each iteration.
+
+Once the table knows which two components it has received, it must send components to the correct 
+smokers.  We can simply use the booleans from the inner for loop to decide where to send and here's 
+what that looks like for the smoker with tobacco:
+
+.code threesmokers/main.go /STARTSWTSEND OMIT/,/STOPSWTSEND OMIT/
+.caption _Listing_ _3d_: If the table `hasPapers` and `hasLighter` it will forward these components to the SWT channels.  Each send is wrapped in a listen from the stop channel.
+
+The table effectively acts as a mediator between the agent and the smokers.  The table generates new
+channels that the simple or "dumb" smokers can listen on.  The table excludes any smoker from taking
+a resource before knowing that it actually needs _both_ resources placed on the table.
+
+# Coordinating the Smokers
+# Deadlock Scenario
+# Correct Synchronization
+# Coordinating the Agent
+
+** Signaler
+The signaler is the final sub-problem to solve and it is really a wrapper around starting up all of the 
+other goroutines and feeding singals back to the agent.
+
+.code threesmokers/main.go /STARTSIGNALERSIG OMIT/,/STOPSIGNALERSIG OMIT/
+.caption _Listing_ _4a_: The signaler accepts a stop channel and a delay.  Once the signaler reads a message from a smoker, it will wait until the delay elapses to signal the agent.
+
+The signaler starts up the goroutines for the agent, table and smokers.  This requires some setup and
+then the signaler returns a `done` channel which is only closed once all child goroutines are dead.
+
+.code threesmokers/main.go /STARTSIGNALERSETUP OMIT/,/STOPSIGNALERSETUP OMIT/
+.code threesmokers/main.go /STARTWAIT OMIT/,/STOPWAIT OMIT/
+.caption _Listing_ _4b_: The signaler must call `wait` to know that all the child goroutines are stopped.
+
+.code threesmokers/main.go /STARTSIGNALLOOP OMIT/,/STOPSIGNALLOOP OMIT/
+.caption _Listing_ _4c_: This code is the main run loop of the signaler, which simply reads from the smokers and then calls the agent after a delay.
+
+The signaler goroutine's main run loop is relatively simple as it only reads from the smokers.  Let's review:
+
+*1* Here we defer a call to the `wait()` closure which will block until all the child goroutines are stopped.
+
+*2* We have to send an initial signal to the agent before we start the for loop listening to the smokers.
+This will cause the agent to place its first two items on the table and start the entire system moving.
+
+*3* At this point we have already received a message from one of the smokers and now we just pause for
+an artificial delay before signaling to the agent.
+
+*4* Here the signaler does it's main job: sending a message to the agent.  It is important however to wrap this send in
+a listen from the stop channel so that the signaler itself does not deadlock in the event that the 
+agent is already shutdown.
+
+
+* Review and Solution
+
+Now that we have reviewed all of the sub-problems let's take a look at the final solution in action.
+Press the `Run` button on the listing below to view the logs of the coordinated system.
+
+.play threesmokers/main.go /STARTMAIN OMIT/,/STOPMAIN OMIT/
+.caption _Listing_ _5_: Press the `Run` button to view the logs of the coordinated system.
+
+The "three smokers" problem is an interesting concurrency challenge that can be solved in a variety
+of ways.  In this approach, I chose to stick with using only `channels` and opted to not use any
+mutex variables.  This gave me a chance to explore the synchronization capabilities of channels to a greater
+depth.  

@@ -10,26 +10,27 @@ The "three smokers" problem is a canonical concurrency problem in computer scien
 forces the solver to resolve a deadlock scenario that arises when each smoker acts to satisfy 
 their own needs independently.
 
-## What
-Wikipedia states the problem as:
+** What?
+A version of the problem is as follows:
 
-    Assume a cigarette requires three ingredients to make and smoke: tobacco, paper and a lighter.
+Assume a cigarette requires three ingredients to make and smoke: tobacco, paper and a lighter.
 
-    There are three smokers around a table:
-    - One smoker has an infinite supply of tobacco.
-    - One smoker has an infinite supply of paper.
-    - One smoker has a lighter.
+There are three smokers around a table:
 
-    There is also a non-smoking agent. The agent picks two items arbitrarily and places them on the
-    table. 
-    
-    The smoker with the third component should remove the two items from the table, use them 
-    to make a cigarette, which they smoke for a while. Once the smoker has finished their cigarette, 
-    the agent places two new items on the table. 
-    
-    This process continues forever.
+- One smoker has an infinite supply of tobacco.
+- One smoker has an infinite supply of paper.
+- One smoker has a lighter.
 
-** Why
+There is also a non-smoking agent. The agent picks two items arbitrarily and places them on the
+table. 
+
+The smoker with the third component should remove the two items from the table, use them 
+to make a cigarette, which they smoke for a while. Once the smoker has finished their cigarette, 
+the agent places two new items on the table. 
+
+This process continues forever.
+
+** Why?
 The problem highlights the need for proper synchronization in concurrent systems.  
 
 There is inherent competition to obtain all the necessary resources because each smoker 
@@ -43,7 +44,7 @@ There are many solutions to this problem.  This post details a solution to the p
 subdivides the problem into several sub-problems:
 
 - *agent*: waits for a signal and places two items onto the table
-- *table*: receives items from the agent and places them on the table 
+- *table*: receives items from the agent and passes items to a single smoker
 - *smoker*: receives two items from the table and makes a cigarette 
 - *signaler*: listens for smokers to complete a cigarette and signals the agent
 
